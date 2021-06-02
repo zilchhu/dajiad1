@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    body {
+      display: flex;
+      margin: 0;
+      padding: 0;
+      font-size: 14px;
+    }
+
+    :root {
+      --aside-width: 200px;
+    }
+
+    aside {
+      position: relative;
+      width: var(--aside-width);
+      height: 100vh;
+      border-right: 1px solid #333;
+      overflow: hidden;
+    }
+
+    .aside-collapse {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+    }
+
+    .shop-item {
+      position: relative;
+    }
+
+    .shop-item-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 0;
+      z-index: 100;
+      cursor: pointer;
+    }
+
+    .shop-item-input {
+      width: 150px;
+      border: none;
+      outline: none;
+    }
+
+    webview {
+      display: inline-flex;
+      flex-grow: 1;
+      height: 100vh;
+    }
+  </style>
+</head>
+
+<body>
+  <aside>
+    <div class="aside-collapse">收起</div>
+    <select name="platform" class="platform-select">
+      <option value="美团">美团</option>
+      <option value="饿了么">饿了么</option>
+    </select>
+    <input type="text" name="shopName" placeholder="请输入店铺名称">
+    <input type="submit" value="添加店铺">
+    <ol class="shop-list"></ol>
+  </aside>
+
+  <!-- <webview src="https://www.github.com/"></webview> -->
+
+
+  <script>
+    const { ipcRenderer } = require('electron')
+
+    let shops = JSON.parse(localStorage.getItem('shops')) || []
+
+    let asideCollapse = document.querySelector('.aside-collapse')
+    let platformSelect = document.querySelector('.platform-select')
+    let shopNameInput = document.querySelector('input[name="shopName"]')
+    let submitInput = document.querySelector('input[type="submit"]')
+    let shopList = document.querySelector('.shop-list')
+
+    asideCollapse.addEventListener('click', (e) => {
+      if (e.target.innerText == '收起') {
+        document.documentElement.style.setProperty('--aside-width', '2em')
+        e.target.innerText = '展开'
+      } else {
+        document.documentElement.style.setProperty('--aside-width', '200px')
+        e.target.innerText = '收起'
+      }
+    })
+
+    platformSelect.addEventListener('change', (e) => {
+      buildShopList()
+    })
+
+    submitInput.addEventListener('click', (e) => {
+      const platform = platformSelect.value
+      const shopName = shopNameInput.value
+
+      if (platform != '' && shopName != '') {
+        // if (shops.findIndex(shop => shop.platform == platform && shop.shopName == shopName) == -1) {
+        const shopId = (shops.reduce((max, { shopId }) => shopId > max ? shopId : max, 0)) + 1
+        shopList.appendChild(createShopItem({ shopId, platform, shopName }))
+        shops.push({ shopId, platform, shopName })
+        localStorage.setItem('shops', JSON.stringify(shops))
+        // }
+      }
+    })
+
+    function createShopItem({ shopId, shopName, platform }) {
+      let li = document.createElement('li')
+      li.classList.add('shop-item')
+      li.dataset.shopId = shopId
+      li.onmouseup = function (e) {
+        if (e.which == 3) {
+          let menu = e.target.querySelector('.shop-item-menu')
+          menu.style.display = 'block'
+        } else {
+          // ipcRenderer.send('select-shop', { shopId, platform })
+          let webview = document.querySelector('webview')
+          if (webview) {
+            webview.remove()
+          }
+          let newWebview = document.createElement('webview')
+          newWebview.setAttribute('src', platform == '美团' ? 'https://e.waimai.meituan.com/#/v2/index' : 'https://melody.shop.ele.me/')
+          newWebview.setAttribute('partition', `persist:${shopId}`)
+          newWebview.setAttribute('allowpopups', true)
+          document.body.appendChild(newWebview)
+        }
+      }
+
+      li.appendChild(document.createTextNode(shopName))
+      li.appendChild(createShopItemMenu(shopId))
+      return li
+    }
+
+    function createShopItemInput(shopId, shopName) {
+      let inputWrapper = document.createElement('div')
+      let input = document.createElement('div')
+      input.classList.add('shop-item-input')
+      input.innerText = shopName
+      input.setAttribute('contentEditable', true)
+      input.dataset.shopId = shopId
+
+      inputWrapper.appendChild(input)
+      return inputWrapper
+    }
+
+    function createShopItemMenu(shopId) {
+      let ul = document.createElement('div')
+      ul.classList.add('shop-item-menu')
+
+      let li1 = document.createElement('div')
+      li1.innerText = '删除'
+      li1.dataset.shopId = shopId
+      li1.onmouseup = function (e) {
+        let webview = document.querySelector('webview')
+        if (webview) {
+          webview.remove()
+        }
+        deleteShopItem(e.target.dataset.shopId)
+        e.stopPropagation()
+      }
+
+      let li2 = document.createElement('div')
+      li2.innerText = '取消'
+      li2.dataset.shopId = shopId
+      li2.onmouseup = function (e) {
+        e.target.parentNode.style.display = 'none'
+        e.stopPropagation()
+      }
+
+      ul.appendChild(li1)
+      ul.appendChild(li2)
+      return ul
+    }
+
+    function deleteShopItem(shopId) {
+      shops = shops.filter(shop => shop.shopId != shopId)
+      localStorage.setItem('shops', JSON.stringify(shops))
+      buildShopList()
+    }
+
+    function buildShopList() {
+      shopList.textContent = ''
+      let fragment = document.createDocumentFragment()
+      shops.filter(shop => shop.platform == platformSelect.value).forEach(shop => {
+        fragment.appendChild(createShopItem(shop))
+      })
+      shopList.appendChild(fragment)
+    }
+
+    buildShopList()
+
+  </script>
+</body>
+
+</html>
